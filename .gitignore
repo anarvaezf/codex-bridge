@@ -1,0 +1,23 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Env
+.env
+.env.*
+!.env.example
+# OS
+.DS_Store
+
+# Logs
+logs/
+*.log
+
+# Runtime
+temp-workspaces/
+
+# Misc
+coverage/
+dist/

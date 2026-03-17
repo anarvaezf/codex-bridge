@@ -91,12 +91,17 @@ function Copy-RuntimeFiles {
 
     New-Item -ItemType Directory -Path $TargetDir -Force | Out-Null
     New-Item -ItemType Directory -Path (Join-Path $TargetDir "agents") -Force | Out-Null
+    New-Item -ItemType Directory -Path (Join-Path $TargetDir "contexts") -Force | Out-Null
 
     Copy-Item (Join-Path $SourceDir "package.json") (Join-Path $TargetDir "package.json") -Force
     Copy-Item (Join-Path $SourceDir "package-lock.json") (Join-Path $TargetDir "package-lock.json") -Force
     Copy-Item (Join-Path $SourceDir "server.min.js") (Join-Path $TargetDir "server.js") -Force
 
     Copy-Item (Join-Path $SourceDir "agents\*") (Join-Path $TargetDir "agents") -Recurse -Force
+
+    if (Test-Path (Join-Path $SourceDir "contexts")) {
+        Copy-Item (Join-Path $SourceDir "contexts\*") (Join-Path $TargetDir "contexts") -Recurse -Force
+    }
 }
 
 $SourceDir = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -108,6 +113,7 @@ $BaseDir = Expand-Path $BaseDirInput
 $TargetDir = Join-Path $BaseDir $DefaultInstallFolderName
 
 $DefaultAgentsDir = Join-Path $TargetDir "agents"
+$DefaultContextsDir = Join-Path $TargetDir "contexts"
 $DefaultTempWorkspacesDir = Join-Path $TargetDir "temp-workspaces"
 
 Write-Host ""
@@ -163,6 +169,9 @@ $PortValue = Prompt-WithDefault "Port" $DefaultPort
 $AgentsDirInput = Prompt-WithDefault "Agents directory" $DefaultAgentsDir
 $AgentsDirValue = Expand-Path $AgentsDirInput
 
+$ContextsDirInput = Prompt-WithDefault "Contexts directory" $DefaultContextsDir
+$ContextsDirValue = Expand-Path $ContextsDirInput
+
 $TempWorkspacesDirInput = Prompt-WithDefault "Temporary workspaces directory" $DefaultTempWorkspacesDir
 $TempWorkspacesDirValue = Expand-Path $TempWorkspacesDirInput
 
@@ -172,6 +181,7 @@ $EnvContent = @"
 PORT=$PortValue
 CODEX_BRIDGE_ROOT=$TargetDir
 AGENTS_DIR=$AgentsDirValue
+CONTEXTS_DIR=$ContextsDirValue
 TEMP_WORKSPACES_DIR=$TempWorkspacesDirValue
 CODEX_TIMEOUT=$TimeoutValue
 "@
@@ -179,6 +189,7 @@ CODEX_TIMEOUT=$TimeoutValue
 $EnvPath = Join-Path $TargetDir ".env"
 $EnvContent | Out-File -FilePath $EnvPath -Encoding utf8
 
+New-Item -ItemType Directory -Path $ContextsDirValue -Force | Out-Null
 New-Item -ItemType Directory -Path $TempWorkspacesDirValue -Force | Out-Null
 
 Write-Host ""

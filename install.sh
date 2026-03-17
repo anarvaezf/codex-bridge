@@ -88,12 +88,17 @@ copy_runtime_files() {
 
   mkdir -p "$target_dir"
   mkdir -p "$target_dir/agents"
+  mkdir -p "$target_dir/contexts"
 
   cp "$source_dir/package.json" "$target_dir/package.json"
   cp "$source_dir/package-lock.json" "$target_dir/package-lock.json"
   cp "$source_dir/server.min.js" "$target_dir/server.js"
 
   rsync -a "$source_dir/agents/" "$target_dir/agents/"
+
+  if [[ -d "$source_dir/contexts" ]]; then
+    rsync -a "$source_dir/contexts/" "$target_dir/contexts/"
+  fi
 }
 
 print_header
@@ -103,6 +108,7 @@ BASE_DIR="$(expand_path "$BASE_DIR_INPUT")"
 TARGET_DIR="$BASE_DIR/$DEFAULT_INSTALL_FOLDER_NAME"
 
 DEFAULT_AGENTS_DIR="$TARGET_DIR/agents"
+DEFAULT_CONTEXTS_DIR="$TARGET_DIR/contexts"
 DEFAULT_TEMP_WORKSPACES_DIR="$TARGET_DIR/temp-workspaces"
 
 echo ""
@@ -155,6 +161,9 @@ PORT_VALUE="$(prompt_with_default "Port" "$DEFAULT_PORT")"
 AGENTS_DIR_INPUT="$(prompt_with_default "Agents directory" "$DEFAULT_AGENTS_DIR")"
 AGENTS_DIR_VALUE="$(expand_path "$AGENTS_DIR_INPUT")"
 
+CONTEXTS_DIR_INPUT="$(prompt_with_default "Contexts directory" "$DEFAULT_CONTEXTS_DIR")"
+CONTEXTS_DIR_VALUE="$(expand_path "$CONTEXTS_DIR_INPUT")"
+
 TEMP_WORKSPACES_DIR_INPUT="$(prompt_with_default "Temporary workspaces directory" "$DEFAULT_TEMP_WORKSPACES_DIR")"
 TEMP_WORKSPACES_DIR_VALUE="$(expand_path "$TEMP_WORKSPACES_DIR_INPUT")"
 
@@ -164,11 +173,13 @@ cat > "$TARGET_DIR/.env" <<EOF
 PORT=$PORT_VALUE
 CODEX_BRIDGE_ROOT=$TARGET_DIR
 AGENTS_DIR=$AGENTS_DIR_VALUE
+CONTEXTS_DIR=$CONTEXTS_DIR_VALUE
 TEMP_WORKSPACES_DIR=$TEMP_WORKSPACES_DIR_VALUE
 CODEX_TIMEOUT=$TIMEOUT_VALUE
 EOF
 
 mkdir -p "$TEMP_WORKSPACES_DIR_VALUE"
+mkdir -p "$CONTEXTS_DIR_VALUE"
 
 echo ""
 print_success ".env created at:"

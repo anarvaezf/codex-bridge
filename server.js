@@ -15,6 +15,9 @@ const PROJECT_ROOT = process.env.CODEX_BRIDGE_ROOT || path.resolve(__dirname);
 const AGENTS_DIR =
   process.env.AGENTS_DIR || path.join(PROJECT_ROOT, "agents");
 
+const CONTEXTS_DIR =
+  process.env.CONTEXTS_DIR || path.join(PROJECT_ROOT, "contexts");
+
 const TEMP_WORKSPACES_DIR =
   process.env.TEMP_WORKSPACES_DIR ||
   path.join(PROJECT_ROOT, "temp-workspaces");
@@ -65,9 +68,80 @@ function readFileOrThrow(filePath, description) {
   return fs.readFileSync(filePath, "utf8");
 }
 
-function buildCombinedAgentsContent(baseContent, agentContent) {
-  return `${baseContent.trim()}\n\n${agentContent.trim()}\n`;
+/**
+ * -------- CONTEXTS --------
+ */
+
+function isValidContextPath(contextPath) {
+  if (typeof contextPath !== "string") return false;
+  if (contextPath.startsWith("/")) return false;
+  if (contextPath.includes("..")) return false;
+  return true;
 }
+
+function resolveContextFilePath(contextPath) {
+  const fullPath = path.resolve(CONTEXTS_DIR, contextPath);
+
+  if (!fullPath.startsWith(path.resolve(CONTEXTS_DIR))) {
+    throw new Error(`Invalid context path: ${contextPath}`);
+  }
+
+  return fullPath;
+}
+
+function readContextsOrThrow(contexts) {
+  if (!Array.isArray(contexts)) {
+    throw new Error("contexts must be an array");
+  }
+
+  const seen = new Set();
+
+  return contexts.map((ctx) => {
+    if (!isValidContextPath(ctx)) {
+      throw new Error(`Invalid context path: ${ctx}`);
+    }
+
+    if (seen.has(ctx)) {
+      throw new Error(`Duplicate context: ${ctx}`);
+    }
+
+    seen.add(ctx);
+
+    const filePath = resolveContextFilePath(ctx);
+
+    if (!fs.existsSync(filePath)) {
+      throw new Error(`Context file not found: ${ctx}`);
+    }
+
+    return fs.readFileSync(filePath, "utf8");
+  });
+}
+
+/**
+ * -------- AGENTS COMPOSITION --------
+ * Order:
+ * 1. _base.md
+ * 2. contexts
+ * 3. agent
+ */
+
+function buildRuntimeAgentsContent({
+  baseContent,
+  contextContents,
+  agentContent,
+}) {
+  const sections = [
+    baseContent.trim(),
+    ...contextContents.map((c) => c.trim()),
+    agentContent.trim(),
+  ];
+
+  return `${sections.join("\n\n")}\n`;
+}
+
+/**
+ * -------- PROMPT --------
+ */
 
 function buildPrompt(input) {
   if (typeof input === "string") {
@@ -90,6 +164,10 @@ function buildPrompt(input) {
     JSON.stringify(input, null, 2),
   ].join("\n");
 }
+
+/**
+ * -------- OUTPUT PARSING --------
+ */
 
 function extractCodexResult(stdout) {
   if (!stdout) return "";
@@ -147,6 +225,10 @@ function validateAgentOutput(parsedOutput) {
   return parsedOutput;
 }
 
+/**
+ * -------- RESPONSES --------
+ */
+
 function buildSuccessResponse(agent, result, debug, debugData) {
   if (!debug) {
     return { result };
@@ -188,10 +270,15 @@ function cleanupWorkspace(workspacePath) {
 function validateStartupPaths() {
   ensureDirectory(TEMP_WORKSPACES_DIR);
   ensureDirectory(AGENTS_DIR);
+  ensureDirectory(CONTEXTS_DIR);
   ensureFileExists(BASE_AGENT_FILE, "Base agent file");
 }
 
 validateStartupPaths();
+
+/**
+ * -------- ROUTE --------
+ */
 
 app.post("/run-codex", (req, res) => {
   let workspacePath = null;
@@ -199,7 +286,7 @@ app.post("/run-codex", (req, res) => {
   const startedAt = Date.now();
 
   try {
-    const { agent, input, options } = req.body ?? {};
+    const { agent, input, contexts = [], options } = req.body ?? {};
     const debug = Boolean(options?.debug);
 
     if (!isValidAgentName(agent)) {
@@ -218,17 +305,20 @@ app.post("/run-codex", (req, res) => {
       );
     }
 
-    ensureDirectory(TEMP_WORKSPACES_DIR);
-
     const agentFilePath = buildAgentFilePath(agent);
 
     const baseContent = readFileOrThrow(BASE_AGENT_FILE, "Base agent file");
     const agentContent = readFileOrThrow(agentFilePath, "Agent file");
 
-    const combinedAgentsContent = buildCombinedAgentsContent(
+    const contextContents = contexts.length
+      ? readContextsOrThrow(contexts)
+      : [];
+
+    const combinedAgentsContent = buildRuntimeAgentsContent({
       baseContent,
-      agentContent
-    );
+      contextContents,
+      agentContent,
+    });
 
     workspacePath = fs.mkdtempSync(
       path.join(TEMP_WORKSPACES_DIR, "codex-bridge-")
@@ -341,6 +431,10 @@ app.post("/run-codex", (req, res) => {
   }
 });
 
+/**
+ * -------- HEALTH --------
+ */
+
 app.get("/health", (_req, res) => {
   res.json({
     status: "ok",
@@ -348,6 +442,7 @@ app.get("/health", (_req, res) => {
     host: os.hostname(),
     projectRoot: PROJECT_ROOT,
     agentsDir: AGENTS_DIR,
+    contextsDir: CONTEXTS_DIR,
     tempWorkspacesDir: TEMP_WORKSPACES_DIR,
   });
 });
@@ -356,5 +451,6 @@ app.listen(PORT, "0.0.0.0", () => {
   console.log(`Codex bridge listening on http://0.0.0.0:${PORT}`);
   console.log(`Project root: ${PROJECT_ROOT}`);
   console.log(`Agents directory: ${AGENTS_DIR}`);
+  console.log(`Contexts directory: ${CONTEXTS_DIR}`);
   console.log(`Temp workspaces directory: ${TEMP_WORKSPACES_DIR}`);
 });

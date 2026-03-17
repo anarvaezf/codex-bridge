@@ -12,6 +12,7 @@ This project allows you to define reusable agents (`.md` files) and execute them
 - Reusable agent definitions
 - Structured JSON input/output
 - Optional debug output (raw Codex response)
+- Optional context injection per request
 - Works with automation tools like n8n
 - Cross-platform (macOS, Linux, Windows)
 
@@ -59,7 +60,7 @@ This creates `server.min.js`, which is used during installation.
 - Installs npm dependencies
 - Prompts for configuration values (with defaults)
 - Generates a `.env` file
-- Prepares required directories
+- Prepares required directories (`agents/`, `contexts/`, `temp-workspaces/`)
 
 ---
 
@@ -118,6 +119,63 @@ OR
 - Must not include extra text
 - Cannot include both `result` and `error`
 - `error` must be a string
+
+---
+
+## Context system (NEW)
+
+You can optionally inject context files into the execution.
+
+### Request field
+
+    "contexts": ["path/to/context.md"]
+
+### Behavior
+
+- Contexts are optional
+- If omitted → only `_base.md` + agent are used
+- If provided → contexts are injected before the agent
+- Multiple contexts are supported
+- Order matters
+
+### Example
+
+    {
+      "agent": "tikiflow-issue-refiner",
+      "contexts": [
+        "tikiflow/tikiflow-context.md",
+        "tikiflow/tikiflow-api-context.md"
+      ],
+      "input": {
+        "taskType": ["api"],
+        "parent": {
+          "title": "Feature title",
+          "body": "Feature description"
+        },
+        "child": {
+          "title": "Task title",
+          "body": "Task description"
+        }
+      }
+    }
+
+---
+
+## Folder structure
+
+    agents/
+      _base.md
+      greeter.md
+      count-chars.md
+
+    contexts/
+      tikiflow/
+        tikiflow-context.md
+        tikiflow-api-context.md
+        tikiflow-admin-context.md
+        tikiflow-database-context.md
+
+    temp-workspaces/
 
 ---
 
@@ -242,10 +300,11 @@ Each file represents a specific behavior:
 ## How it works
 
 1. Loads `_base.md`
-2. Loads selected agent (e.g. `greeter.md`)
-3. Combines into runtime `AGENTS.md`
-4. Sends input to Codex
-5. Parses structured JSON response
+2. Loads context files (if provided)
+3. Loads selected agent (e.g. `greeter.md`)
+4. Combines everything into runtime `AGENTS.md`
+5. Executes Codex
+6. Parses structured JSON response
 
 ---
 
@@ -256,6 +315,7 @@ The installer generates a `.env` file.
     PORT=8787
     CODEX_BRIDGE_ROOT=
     AGENTS_DIR=
+    CONTEXTS_DIR=
     TEMP_WORKSPACES_DIR=
     CODEX_TIMEOUT=60000
 
@@ -303,6 +363,7 @@ Execution exceeded `CODEX_TIMEOUT`
 ## Notes
 
 - `.env` is optional (defaults exist)
+- `contexts` is optional per request
 - `temp-workspaces/` is used at runtime
 - Agents must strictly follow JSON contract
 - The bridge is stateless
